@@ -1,0 +1,10 @@
+
+chromadb
+sentence-transformers
+gradio
+wikipedia
+requests
+beautifulsoup4
+pypdf
+ollama
+pytest

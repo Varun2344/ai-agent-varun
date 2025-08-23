@@ -1,0 +1,38 @@
+[
+  {
+    "name": "Notion_Homepage",
+    "url": "https://www.notion.so/"
+  },
+  {
+    "name": "Notion_Pricing",
+    "url": "https://www.notion.so/pricing"
+  },
+  {
+    "name": "Notion_ReleaseNotes",
+    "url": "https://www.notion.so/releases"
+  },
+  {
+    "name": "Slack_Homepage",
+    "url": "https://slack.com/"
+  },
+  {
+    "name": "Slack_Pricing",
+    "url": "https://slack.com/pricing"
+  },
+  {
+    "name": "Slack_ReleaseNotes",
+    "url": "https://slack.com/release-notes/windows"
+  },
+  {
+    "name": "Figma_Homepage",
+    "url": "https://www.figma.com/"
+  },
+  {
+    "name": "Figma_Pricing",
+    "url": "https://www.figma.com/pricing"
+  },
+  {
+    "name": "Figma_ReleaseNotes",
+    "url": "https://www.figma.com/release-notes"
+  }
+]
