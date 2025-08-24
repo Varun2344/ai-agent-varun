@@ -107,4 +107,4 @@ with gr.Blocks(theme=gr.themes.Soft(), css="footer {display: none !important}") 
 
 
 if __name__ == "__main__":
-    demo.launch(share=True)
+    demo.launch()

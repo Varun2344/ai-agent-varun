@@ -48,9 +48,9 @@ def format_and_send_digest(monitoring_results: dict, slack_url: str):
     # Post the entire digest to Slack
     try:
         requests.post(slack_url, json={"blocks": master_blocks}, timeout=15)
-        print("\n✅ Consolidated digest sent to Slack.")
+        print("\nConsolidated digest sent to Slack.")
     except Exception as e:
-        print(f"\n❌ Failed to send consolidated digest to Slack: {e}")
+        print(f"\nFailed to send consolidated digest to Slack: {e}")
 
 
 # --- Other functions (fetch_text_from_url, get_text_hash, summarize_change_with_ai) are unchanged ---
