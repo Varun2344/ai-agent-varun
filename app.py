@@ -84,7 +84,7 @@ def run_monitor_script(model_name):
         yield output_log
     
     process.wait()
-    time.sleep(2)
+    time.sleep(1)
     yield output_log + "\n\nAgent run complete. The digest below will now update."
 
 # --- Gradio Interface Definition ---
