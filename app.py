@@ -1,51 +1,77 @@
-# app.py (Upgraded with Hardcoded Slack URL for simplicity)
+# app.py (Final Version with Digest View)
 import gradio as gr
 import subprocess
 import json
-import pandas as pd
 import os
+import datetime
+from collections import defaultdict
 
 LOG_FILE = "summary_log.jsonl"
 PYTHON_EXECUTABLE = ".\\.venv\\Scripts\\python.exe" # For Windows venv
-full_log_data = []
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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" # Paste your Slack URL here
 
-# --- IMPORTANT: PASTE YOUR SLACK WEBHOOK URL HERE ---
-# This makes the UI cleaner, as you don't have to enter it every time.
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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" 
+def load_and_format_digest():
+    """
+    Loads the latest summary for each competitor page from the log file
+    and formats it into a single, beautiful markdown string for the UI.
+    """
+    if not os.path.exists(LOG_FILE):
+        return "No history found. Run the monitor to generate a report."
 
-def load_summaries():
-    """Loads and processes summaries from the log file."""
-    global full_log_data
-    summaries, full_log_data = [], []
-    if os.path.exists(LOG_FILE):
-        with open(LOG_FILE, 'r', encoding='utf-8') as f:
-            for line in f:
-                try:
-                    data = json.loads(line)
-                    summary = data.get('summary', {})
-                    summaries.append({
-                        "Timestamp": data.get('timestamp', 'N/A').split('T')[0],
-                        "Competitor": data.get('competitor', 'N/A').replace('_', ' '),
-                        "Category": summary.get('change_category', 'N/A'),
-                        "Title": summary.get('change_title', 'N/A'),
-                        "Impact": summary.get('impact_level', 'N/A')
-                    })
-                    full_log_data.append(data)
-                except json.JSONDecodeError:
-                    continue
-    if not summaries:
-        return pd.DataFrame(columns=["Timestamp", "Competitor", "Category", "Title", "Impact"]), "Select a row to see details."
+    # This dictionary will store the most recent entry for each unique competitor page
+    latest_entries = {}
+    with open(LOG_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            try:
+                data = json.loads(line)
+                # Create a unique key for each competitor page (e.g., "Figma_Pricing")
+                competitor_key = data.get('competitor')
+                if competitor_key:
+                    latest_entries[competitor_key] = data # The last entry in the file is the newest
+            except json.JSONDecodeError:
+                continue
+
+    if not latest_entries:
+        return "Log file is empty. Run the monitor to generate a report."
+
+    # Group the latest entries by company name
+    results_by_company = defaultdict(list)
+    for key, data in latest_entries.items():
+        company_name = key.split('_')[0]
+        results_by_company[company_name].append(data)
+
+    # Build the final markdown string
+    digest_md = f"## Competitor Intelligence Digest - {datetime.date.today()}\n"
+    competitor_number = 1
     
-    full_log_data.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
-    df = pd.DataFrame(summaries).sort_values(by="Timestamp", ascending=False)
-    return df, "Select a row in the history table to see full details."
+    for company_name, entries in sorted(results_by_company.items()):
+        digest_md += f"### {competitor_number}) {company_name} Summary:\n"
+        page_letter_code = ord('A')
+        for entry in sorted(entries, key=lambda x: x['competitor']):
+            page_type = entry['competitor'].replace(f"{company_name}_", "")
+            summary = entry.get('summary', {})
+            title = summary.get('change_title', 'N/A')
+            points = summary.get('summary_points', [])
+
+            digest_md += f"**{chr(page_letter_code)}.** `{page_type}`: "
+            if summary.get("change_detected", False):
+                summary_text = "\n".join([f"  - {p}" for p in points])
+                digest_md += f"**{title}**\n{summary_text}\n"
+            else:
+                # In a real scenario, we'd log "no change", but our log only contains changes.
+                # For the UI, we can assume anything in the log is a change.
+                # Let's adjust this to always show the summary if an entry exists.
+                summary_text = "\n".join([f"  - {p}" for p in points])
+                digest_md += f"**{title}**\n{summary_text}\n"
+            page_letter_code += 1
+        competitor_number += 1
+        
+    return digest_md
 
 def run_monitor_script(model_name):
     """Runs the monitor.py script and yields its output."""
     yield "Agent is starting the monitoring process..."
-    
     command = [PYTHON_EXECUTABLE, "monitor.py", "--model", model_name]
-    # Add the slack command only if a URL has been provided in the code
     if SLACK_WEBHOOK_URL and "YOUR/URL/HERE" not in SLACK_WEBHOOK_URL:
         command.extend(["--slack", SLACK_WEBHOOK_URL])
 
@@ -57,26 +83,7 @@ def run_monitor_script(model_name):
         yield output_log
     
     process.wait()
-    yield output_log + "\n\n Agent run complete. You can now refresh the history."
-
-def show_details(evt: gr.SelectData):
-    """Displays the full details of a selected row."""
-    if evt.index is None or not full_log_data:
-        return "Select a row to see details."
-    selected_data = full_log_data[evt.index[0]]
-    summary = selected_data.get('summary', {})
-    details_md = f"""
-### Details for {selected_data.get('competitor')}
-**Timestamp:** {selected_data.get('timestamp')}
-**Category:** {summary.get('change_category')}
-**Title:** {summary.get('change_title')}
-**Impact:** {summary.get('impact_level')}
-**Summary Points:**
-"""
-    for point in summary.get('summary_points', []): details_md += f"- {point}\n"
-    details_md += "\n**Evidence Snippets:**\n"
-    for evidence in summary.get('evidence', []): details_md += f"`{evidence}`\n"
-    return details_md
+    yield output_log + "\n\nAgent run complete. The digest below will now update."
 
 # --- Gradio Interface Definition ---
 with gr.Blocks(theme=gr.themes.Soft(), css="footer {display: none !important}") as demo:
@@ -91,21 +98,20 @@ with gr.Blocks(theme=gr.themes.Soft(), css="footer {display: none !important}") 
             log_output = gr.Textbox(label="Live Output", interactive=False, lines=10, max_lines=10)
 
     gr.Markdown("---")
-    gr.Markdown("###  Detected Changes History")
-    df, details_text = load_summaries()
-    summary_df = gr.DataFrame(df, interactive=False, wrap=True)
-    details_md_box = gr.Markdown(details_text)
+    gr.Markdown("### Latest Intelligence Digest")
+    
+    # We now use a Markdown component instead of a DataFrame
+    summary_display = gr.Markdown(value=load_and_format_digest())
 
     # --- Event Handlers ---
     run_button.click(
         fn=run_monitor_script,
-        inputs=[model_dropdown], # Input is now just the model
+        inputs=[model_dropdown],
         outputs=log_output
     ).then(
-        fn=load_summaries,
-        outputs=[summary_df, details_md_box]
+        fn=load_and_format_digest,
+        outputs=summary_display # Update the markdown display
     )
-    summary_df.select(fn=show_details, outputs=details_md_box)
 
 if __name__ == "__main__":
     demo.launch(share=True)
