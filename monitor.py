@@ -125,7 +125,7 @@ def run_monitor(config_path: str, snapshot_dir: str, model_name: str, slack_url:
             old_hash = get_text_hash(old_text)
 
             if new_hash != old_hash:
-                print(f"  -> 🔥 Change DETECTED for {name}!")
+                print(f"  -> Change DETECTED for {name}!")
                 ai_summary = summarize_change_with_ai(old_text, new_text, url, model_to_use=model_name)
                 
                 if ai_summary and ai_summary.get("change_detected"):

@@ -1,47 +1,40 @@
-# app.py (Final Version with Digest View)
+# app.py (Final Version with Manual Refresh Logic)
 import gradio as gr
 import subprocess
 import json
+import pandas as pd
 import os
 import datetime
-import time
 from collections import defaultdict
 
 LOG_FILE = "summary_log.jsonl"
-PYTHON_EXECUTABLE = ".\\.venv\\Scripts\\python.exe" # For Windows venv
-SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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" # Paste your Slack URL here
+PYTHON_EXECUTABLE = ".\\.venv\\Scripts\\python.exe"
+SLACK_WEBHOOK_URL = "https://hooks.slack.com/services/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" # Paste your Slack URL here
 
 def load_and_format_digest():
-    """
-    Loads the latest summary for each competitor page from the log file
-    and formats it into a single, beautiful markdown string for the UI.
-    """
+    """Loads the latest summary for each competitor page and formats it into a markdown string."""
     if not os.path.exists(LOG_FILE):
         return "No history found. Run the monitor to generate a report."
 
-    # This dictionary will store the most recent entry for each unique competitor page
     latest_entries = {}
     with open(LOG_FILE, 'r', encoding='utf-8') as f:
         for line in f:
             try:
                 data = json.loads(line)
-                # Create a unique key for each competitor page (e.g., "Figma_Pricing")
                 competitor_key = data.get('competitor')
                 if competitor_key:
-                    latest_entries[competitor_key] = data # The last entry in the file is the newest
+                    latest_entries[competitor_key] = data
             except json.JSONDecodeError:
                 continue
 
     if not latest_entries:
-        return "Log file is empty. Run the monitor to generate a report."
+        return "Log file is empty. Run the monitor to see a report."
 
-    # Group the latest entries by company name
     results_by_company = defaultdict(list)
     for key, data in latest_entries.items():
         company_name = key.split('_')[0]
         results_by_company[company_name].append(data)
 
-    # Build the final markdown string
     digest_md = f"## Competitor Intelligence Digest - {datetime.date.today()}\n"
     competitor_number = 1
     
@@ -55,15 +48,8 @@ def load_and_format_digest():
             points = summary.get('summary_points', [])
 
             digest_md += f"**{chr(page_letter_code)}.** `{page_type}`: "
-            if summary.get("change_detected", False):
-                summary_text = "\n".join([f"  - {p}" for p in points])
-                digest_md += f"**{title}**\n{summary_text}\n"
-            else:
-                # In a real scenario, we'd log "no change", but our log only contains changes.
-                # For the UI, we can assume anything in the log is a change.
-                # Let's adjust this to always show the summary if an entry exists.
-                summary_text = "\n".join([f"  - {p}" for p in points])
-                digest_md += f"**{title}**\n{summary_text}\n"
+            summary_text = "\n".join([f"  - {p}" for p in points])
+            digest_md += f"**{title}**\n{summary_text}\n"
             page_letter_code += 1
         competitor_number += 1
         
@@ -71,7 +57,7 @@ def load_and_format_digest():
 
 def run_monitor_script(model_name):
     """Runs the monitor.py script and yields its output."""
-    yield "Agent is starting the monitoring process..."
+    yield "🏃 Agent is starting the monitoring process... Please wait."
     command = [PYTHON_EXECUTABLE, "monitor.py", "--model", model_name]
     if SLACK_WEBHOOK_URL and "YOUR/URL/HERE" not in SLACK_WEBHOOK_URL:
         command.extend(["--slack", SLACK_WEBHOOK_URL])
@@ -84,36 +70,37 @@ def run_monitor_script(model_name):
         yield output_log
     
     process.wait()
-    time.sleep(1)
-    yield output_log + "\n\nAgent run complete. The digest below will now update."
+    # NEW FINAL MESSAGE to guide the user
+    yield output_log + "\n\n✅ Agent run complete. Click the 'Refresh History' button to see the new digest."
 
 # --- Gradio Interface Definition ---
 with gr.Blocks(theme=gr.themes.Soft(), css="footer {display: none !important}") as demo:
-    gr.Markdown("# Competitor Intelligence Agent")
+    gr.Markdown("# 🕵️ Competitor Intelligence Agent")
     with gr.Row():
         with gr.Column(scale=1):
             gr.Markdown("### Controls")
             model_dropdown = gr.Dropdown(choices=["phi3", "mistral:7b", "llama3:8b"], value="phi3", label="Select AI Model")
-            run_button = gr.Button("Run Monitor Now", variant="primary")
+            run_button = gr.Button("🚀 Run Monitor Now", variant="primary")
         with gr.Column(scale=3):
             gr.Markdown("### Agent Log")
             log_output = gr.Textbox(label="Live Output", interactive=False, lines=10, max_lines=10)
 
     gr.Markdown("---")
-    gr.Markdown("### Latest Intelligence Digest")
+    gr.Markdown("### 📊 Latest Intelligence Digest")
     
-    # We now use a Markdown component instead of a DataFrame
+    refresh_button = gr.Button("🔄 Refresh History") # Moved the button here for better flow
     summary_display = gr.Markdown(value=load_and_format_digest())
 
     # --- Event Handlers ---
+    # The run button ONLY updates the log
     run_button.click(
         fn=run_monitor_script,
         inputs=[model_dropdown],
         outputs=log_output
-    ).then(
-        fn=load_and_format_digest,
-        outputs=summary_display # Update the markdown display
     )
+    
+    # The refresh button ONLY updates the digest
+    refresh_button.click(fn=load_and_format_digest, outputs=summary_display)
 
 if __name__ == "__main__":
     demo.launch(share=True)
