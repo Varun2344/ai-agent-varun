@@ -1,0 +1,21 @@
+--- Starting Competitor Monitor (using model: phi3) ---
+
+Checking: Notion_Homepage (https://www.notion.so/)
+
+Checking: Notion_Pricing (https://www.notion.so/pricing)
+
+Checking: Notion_ReleaseNotes (https://www.notion.so/releases)
+
+Checking: Slack_Homepage (https://slack.com/)
+
+Checking: Slack_Pricing (https://slack.com/pricing)
+
+Checking: Slack_ReleaseNotes (https://slack.com/release-notes/windows)
+
+Checking: Figma_Homepage (https://www.figma.com/)
+
+Checking: Figma_Pricing (https://www.wikipedia.org/)
+
+Checking: Figma_ReleaseNotes (https://www.figma.com/release-notes)
+
+--- Monitor run complete ---
