@@ -1,4 +1,4 @@
-# app.py (Final Polished Version)
+# app.py (FINAL SUBMISSION VERSION WITH MODERN UI)
 import gradio as gr
 import subprocess
 import json
@@ -14,97 +14,90 @@ LOG_FILE = "summary_log.jsonl"
 CONFIG_FILE = "competitors.json"
 PYTHON_EXECUTABLE = ".\\.venv\\Scripts\\python.exe"
 
-# FINAL, CORRECTED DIGEST FUNCTION with formatting fix
+# --- FINAL, UPGRADED DIGEST FUNCTION for UI ---
 def load_and_format_digest():
     """
-    Loads all monitored pages from competitors.json, updates their status with the
-    latest findings from the log file, and formats the complete digest with line breaks.
+    Loads the latest summaries and formats them into the new detailed
+    markdown string for the UI, grouped by category.
     """
-    try:
-        # Step 1: Build a complete list of all pages we should be tracking from the config file.
-        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-            competitors_config = json.load(f)
-        
-        status_report = {}
-        for item in competitors_config:
-            status_report[item['name']] = "No significant changes detected." # Default status
+    if not os.path.exists(LOG_FILE):
+        return "<div style='color: #f0f0f0;'>No history found. Run the monitor to generate a report.</div>"
 
-        # Step 2: Read the log file to find the latest summary for any page that has changed.
-        if os.path.exists(LOG_FILE):
-            with open(LOG_FILE, 'r', encoding='utf-8') as f:
-                for line in f:
-                    try:
-                        data = json.loads(line)
-                        competitor_key = data.get("competitor")
-                        if competitor_key in status_report and data.get("summary", {}).get("change_detected"):
-                            status_report[competitor_key] = data["summary"]
-                    except json.JSONDecodeError:
-                        continue
-        
-        # Step 3: Group all statuses by company to build the report.
-        results_by_company = defaultdict(list)
-        for key, summary_or_status in status_report.items():
-            company_name = key.split('_')[0]
-            page_type = key.split('_')[1] if '_' in key else 'General'
-            results_by_company[company_name].append((page_type, summary_or_status))
+    latest_changes = {}
+    with open(LOG_FILE, 'r', encoding='utf-8') as f:
+        for line in f:
+            try:
+                data = json.loads(line)
+                if data.get("competitor") and data.get("summary", {}).get("change_detected"):
+                    latest_changes[(data["competitor"])] = data
+            except json.JSONDecodeError:
+                continue
 
-        # Step 4: Format the final markdown with the A, B, C on separate lines.
-        digest_md = f"## Competitor Intelligence Digest - {datetime.date.today()}\n"
-        competitor_number = 1
-        
-        for company_name, pages in sorted(results_by_company.items()):
-            digest_md += f"\n### {competitor_number}) {company_name} Summary:\n"
-            page_letter_code = ord('A')
-            for page_type, result in sorted(pages):
-                digest_md += f"\n**{chr(page_letter_code)}.** `{page_type}`: "
-                if isinstance(result, str):
-                    # --- THIS IS THE FIX ---
-                    # Added the "\n" to ensure a line break after "No significant changes detected."
-                    digest_md += result + "\n"
-                else:
-                    title = result.get('change_title', 'N/A')
-                    points = result.get('summary_points', [])
-                    summary_text = "\n".join([f"  - {p}" for p in points])
-                    digest_md += f"**{title}**\n{summary_text}\n"
-                page_letter_code += 1
-            competitor_number += 1
-            
-        return digest_md
+    if not latest_changes:
+        return "<div style='color: #f0f0f0;'>No significant changes detected in the latest logs.</div>"
 
-    except Exception as e:
-        return f"## 🚨 Error Displaying Digest\n\nAn error occurred: \n\n```\n{str(e)}\n```"
+    changes_by_category = defaultdict(list)
+    for change in latest_changes.values():
+        category = change['summary'].get('change_category', 'General Update')
+        company_name = change['competitor'].split('_')[0]
+        change['_company_name'] = company_name # Add company name for sorting
+        changes_by_category[(category)].append(change)
+
+    # Build the final markdown string with HTML for styling
+    digest_md = f"<div style='color: #f0f0f0; padding: 20px;'>\n"
+    digest_md += f"<h2 style='color: #add8e6;'>Weekly Competitor Summary - {datetime.date.today()}</h2>\n"
+    digest_md += "<p style='color: #d3d3d3;'>Here's a detailed breakdown of the latest detected changes across competitors.</p>\n"
+
+    for category, changes in sorted(changes_by_category.items()):
+        digest_md += f"<h3 style='color: #87ceeb; margin-top: 20px;'>📄 {category}:</h3>\n"
+        for change in sorted(changes, key=lambda x: x['_company_name']): # Sort by company
+            company = change['_company_name']
+            title = change['summary'].get('change_title', 'N/A')
+            update = change['summary'].get('update', 'N/A')
+            impact = change['summary'].get('impact', 'N/A')
+            analysis = change['summary'].get('analysis', 'N/A')
+
+            digest_md += f"<div style='margin-left: 20px; margin-bottom: 15px; border-left: 2px solid #4682b4; padding-left: 10px;'>\n"
+            digest_md += f"<strong style='color: #eee;'>`{company}` | {title}</strong><br>\n"
+            digest_md += f"<span style='color: #d3d3d3;'>• <strong>Update:</strong> {update}</span><br>\n"
+            digest_md += f"<span style='color: #d3d3d3;'>• <strong>Impact:</strong> {impact}</span><br>\n"
+            digest_md += f"<span style='color: #d3d3d3;'>• <strong>Analysis:</strong> {analysis}</span>\n"
+            digest_md += "</div>\n"
+
+    digest_md += "</div>\n"
+    return digest_md
 
 def run_monitor_script(model_name):
     """Runs the monitor.py script and yields its output."""
-    yield "🏃 Agent is starting the monitoring process..."
+    yield "<div style='color: #f0f0f0;'>🏃 Agent is starting the monitoring process...</div>"
     command = [PYTHON_EXECUTABLE, "monitor.py", "--model", model_name]
     if SLACK_WEBHOOK_URL:
         command.extend(["--slack", SLACK_WEBHOOK_URL])
 
     process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', bufsize=1)
-    output_log = "--- Agent Log ---\n"
+    output_log = "<div style='color: #d3d3d3;'>--- Agent Log ---<br>"
     for line in iter(process.stdout.readline, ''):
-        output_log += line
-        yield output_log
+        output_log += line + "<br>"
+        yield output_log + "</div>"
     process.wait()
-    yield output_log + "\n\n✅ Agent run complete. Click 'Refresh History' to update the digest."
+    yield output_log + "<br><br><span style='color: #98fb98;'>✅ Agent run complete. Click 'Refresh History' to update the digest.</span></div>"
 
-# --- Gradio Interface Definition ---
-with gr.Blocks(theme=gr.themes.Soft(), css="footer {display: none !important}") as demo:
-    gr.Markdown("# 🕵️ Competitor Intelligence Agent")
+# --- Gradio Interface Definition with Dark Theme and Styling ---
+with gr.Blocks(theme=gr.themes.Base(primary_hue="blue", secondary_hue="blue"), css="body { background-color: #1e1e24; color: #f0f0f0; } footer {display: none !important;}") as demo:
+    gr.Markdown("<div style='color: #add8e6; text-align: center;'><h1>🕵️ Competitor Intelligence Agent</h1></div>")
     with gr.Row():
         with gr.Column(scale=1):
-            gr.Markdown("### Controls")
-            model_dropdown = gr.Dropdown(choices=["phi3", "mistral:7b", "llama3:8b"], value="phi3", label="Select AI Model")
+            gr.Markdown("<h3 style='color: #d3d3d3;'>⚙️ Controls</h3>")
+            model_dropdown = gr.Dropdown(choices=["phi3", "mistral:7b", "llama3:8b"], value="phi3", label="AI Model", elem_classes="dark-input")
             run_button = gr.Button("🚀 Run Monitor Now", variant="primary")
         with gr.Column(scale=3):
-            gr.Markdown("### Agent Log")
-            log_output = gr.Textbox(label="Live Output", interactive=False, lines=10, max_lines=10)
+            gr.Markdown("<h3 style='color: #d3d3d3;'>📜 Agent Log</h3>")
+            log_output = gr.HTML(label="Live Output")
 
-    gr.Markdown("---")
-    gr.Markdown("### 📊 Latest Intelligence Digest")
-    refresh_button = gr.Button("🔄 Refresh History")
-    summary_display = gr.Markdown(value=load_and_format_digest())
+    gr.HTML("<hr style='border-top: 1px solid #444; margin: 20px 0;'>")
+    gr.Markdown("<h3 style='color: #d3d3d3;'>📊 Latest Intelligence Digest</h3>")
+    refresh_button = gr.Button("📊 Generate Digest")
+    summary_display = gr.HTML(value=load_and_format_digest())
 
     # --- Event Handlers ---
     run_button.click(fn=run_monitor_script, inputs=[model_dropdown], outputs=log_output)

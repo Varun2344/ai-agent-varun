@@ -1,49 +1,63 @@
-# monitor.py (Final Production-Ready Version)
+# monitor.py (FINAL SUBMISSION VERSION)
 import os
 import argparse
 import json
 import hashlib
 import time
 import datetime
-from datetime import timezone # <-- Import timezone for the fix
+from datetime import timezone
 import requests
 from bs4 import BeautifulSoup
 import ollama
 import difflib
 from collections import defaultdict
 
-# --- Helper Functions ---
-
-def format_and_send_digest(monitoring_results: dict, slack_url: str):
-    """Formats all monitoring results into a structured digest and posts it to Slack."""
-    if not slack_url or not monitoring_results:
+def format_and_send_digest(all_changes: dict, slack_url: str):
+    """Groups all changes by category and sends a professional digest to Slack."""
+    if not slack_url or not all_changes:
         return
 
-    master_blocks = [{"type": "header", "text": {"type": "plain_text", "text": f"Competitor Intelligence Digest - {datetime.date.today()}", "emoji": True}}]
-    master_blocks.append({"type": "context", "elements": [{"type": "mrkdwn", "text": "A summary of all monitored competitor pages."}]})
+    # Group changes by their category
+    changes_by_category = defaultdict(list)
+    for change in all_changes:
+        category = change['summary'].get('change_category', 'General Website Update')
+        changes_by_category[category].append(change)
 
-    competitor_number = 1
-    for company_name, pages in monitoring_results.items():
+    # Build the Slack message
+    master_blocks = [
+        {"type": "header", "text": {"type": "plain_text", "text": f"Weekly Competitor Summary - {datetime.date.today()}", "emoji": True}},
+        {"type": "section", "text": {"type": "mrkdwn", "text": "Here's a detailed breakdown of everything that happened this week across competitors."}}
+    ]
+
+    for category, changes in sorted(changes_by_category.items()):
         master_blocks.append({"type": "divider"})
-        report_text = f"*{competitor_number}) {company_name} Summary:*\n"
-        page_letter_code = ord('A')
-        for page_type, result in pages.items():
-            report_text += f"\n*{chr(page_letter_code)}.* `{page_type}`: "
-            if result == "No change":
-                report_text += "No significant changes detected."
-            else:
-                title = result.get("change_title", "N/A")
-                summary_points = "\n".join([f"    • {p}" for p in result.get("summary_points", [])])
-                report_text += f"*{title}*\n{summary_points}"
-            page_letter_code += 1
-        master_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": report_text}})
-        competitor_number += 1
+        master_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*{category}:*"}})
+        for change in changes:
+            company = change['competitor'].split('_')[0]
+            title = change['summary'].get('change_title', 'N/A')
+            update = change['summary'].get('update', 'N/A')
+            impact = change['summary'].get('impact', 'N/A')
+            analysis = change['summary'].get('analysis', 'N/A')
+
+            report_text = (
+                f"› `{company}` *{title}*\n"
+                f"    • *Update:* {update}\n"
+                f"    • *Impact:* {impact}\n"
+                f"    • *Analysis:* {analysis}"
+            )
+            master_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": report_text}})
+
+    # Add the final summary insight
+    insight = f"Overall, this week saw {len(all_changes)} significant update(s), showing trends in {' and '.join(changes_by_category.keys())}."
+    master_blocks.append({"type": "divider"})
+    master_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Summary Insight:* {insight}"}})
 
     try:
         requests.post(slack_url, json={"blocks": master_blocks}, timeout=15)
         print("Consolidated digest sent to Slack.")
     except Exception as e:
         print(f"Failed to send consolidated digest to Slack: {e}")
+
 
 def fetch_text_from_url(url: str):
     try:
@@ -61,24 +75,33 @@ def get_text_hash(text: str):
     if not text: return None
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
+# FINAL, SUPERCHARGED AI function
 def summarize_change_with_ai(old_text: str, new_text: str, url: str, model_to_use: str):
-    print("  -> AI is summarizing and categorizing the changes...")
-    diff = list(difflib.unified_diff(old_text.splitlines(), new_text.splitlines(), fromfile='old', tofile='new', n=3))
+    print("  -> AI is generating a detailed analysis...")
+    diff = list(difflib.unified_diff(old_text.splitlines(), new_text.splitlines(), fromfile='old', tofile='new', n=5))
     if not diff: return {"change_detected": False}
     diff_report = "\n".join(diff)
     if len(diff_report) > 4000: diff_report = diff_report[:4000] + "\n... (diff truncated)"
+    
+    # FINAL, UPGRADED SYSTEM PROMPT
     system_prompt = """
-    You are a sharp-eyed product analyst AI. Your goal is to analyze a 'diff report' from a competitor's page and provide a categorized summary.
-    Lines starting with '-' were removed, lines with '+' were added.
-    First, you MUST categorize the change into one of these 5 specific types:
-    - "Pricing Change"
-    - "Marketing & Messaging"
-    - "Product Update & Release Notes"
-    - "Social Media Announcement"
-    - "General Website Update"
-    Your response MUST be a clean JSON object with this exact structure:
-    {"change_detected": true, "change_category": "The category you identified.", "change_title": "A concise title.", "summary_points": ["Bullet point 1.", "Bullet point 2."], "impact_level": "low" | "medium" | "high", "evidence": ["A direct quote of an important added line.", "Another quote of a removed line."]}
-    If changes are insignificant, return JSON with "change_detected" set to false.
+    You are a world-class principal product analyst. Your job is to analyze a 'diff report' from a competitor's webpage and provide a deeply insightful, structured summary.
+    Lines starting with '-' were removed. Lines starting with '+' were added.
+
+    Your response MUST be a valid JSON object. ALL fields (`change_category`, `change_title`, `update`, `impact`, `analysis`) are REQUIRED.
+    NEVER return 'N/A' for a field. If you cannot determine the impact or analysis, you must make a reasonable and logical inference based on the data.
+
+    The JSON object must have this exact structure:
+    {
+      "change_detected": true,
+      "change_category": "Pricing Change" | "Product Update & Release Notes" | "Marketing & Messaging",
+      "change_title": "A concise, descriptive title of the change.",
+      "update": "A factual, one-sentence summary of WHAT changed.",
+      "impact": "A one-sentence analysis of the potential IMPACT on customers or the user experience.",
+      "analysis": "A one-sentence analysis of the strategic REASON for this change (e.g., market positioning, new target audience, etc.)."
+    }
+    
+    If the change is insignificant (typos, date changes), return JSON with "change_detected" set to false.
     """
     user_prompt = f"Analyze this diff report from {url}:\n\n{diff_report}"
     try:
@@ -88,13 +111,9 @@ def summarize_change_with_ai(old_text: str, new_text: str, url: str, model_to_us
         print(f"  -> AI summary failed with error: {e}"); return None
 
 def save_summary_to_log(summary_json: dict, competitor_name: str, log_file="summary_log.jsonl"):
-    # FIX: Using the new, recommended way to get UTC time
     entry = {"timestamp": datetime.datetime.now(timezone.utc).isoformat(), "competitor": competitor_name, "summary": summary_json}
     with open(log_file, 'a', encoding='utf-8') as f:
         f.write(json.dumps(entry) + '\n')
-    print(f"  -> Summary saved to {log_file}")
-
-# --- Main Execution Function ---
 
 def run_monitor(config_path: str, snapshot_dir: str, model_name: str, slack_url: str):
     print(f"--- Starting Competitor Monitor (using model: {model_name}) ---")
@@ -106,16 +125,10 @@ def run_monitor(config_path: str, snapshot_dir: str, model_name: str, slack_url:
 
     os.makedirs(snapshot_dir, exist_ok=True)
     
-    monitoring_results = defaultdict(dict)
-    for competitor in competitors:
-        name = competitor.get("name")
-        company_name, page_type = name.split('_')[0], name.split('_')[1] if '_' in name else 'General'
-        monitoring_results[company_name][page_type] = "No change"
+    detected_changes = [] # A list to hold all detected changes for the final digest
 
     for competitor in competitors:
         name, url = competitor.get("name"), competitor.get("url")
-        company_name, page_type = name.split('_')[0], name.split('_')[1] if '_' in name else 'General'
-        
         print(f"\nChecking: {name} ({url})")
         new_text = fetch_text_from_url(url)
         if new_text is None: continue
@@ -130,22 +143,20 @@ def run_monitor(config_path: str, snapshot_dir: str, model_name: str, slack_url:
                 print(f"  -> Change DETECTED for {name}!")
                 ai_summary = summarize_change_with_ai(old_text, new_text, url, model_to_use=model_name)
                 
-                if ai_summary:
+                if ai_summary and ai_summary.get("change_detected"):
+                    change_data = {"competitor": name, "summary": ai_summary}
+                    detected_changes.append(change_data)
                     save_summary_to_log(ai_summary, name)
-                    if ai_summary.get("change_detected"):
-                        monitoring_results[company_name][page_type] = ai_summary
                 
                 with open(snapshot_file_path, 'w', encoding='utf-8') as f: f.write(new_text)
         else:
             print(f"  -> First time seeing {name}. Creating snapshot."); 
             with open(snapshot_file_path, 'w', encoding='utf-8') as f: f.write(new_text)
 
-    if slack_url:
-        format_and_send_digest(monitoring_results, slack_url)
+    if slack_url and detected_changes:
+        format_and_send_digest(detected_changes, slack_url)
     
     print("\n--- Monitor run complete ---")
-
-# --- Engine Start Block ---
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Monitor competitor websites for changes.")
@@ -154,5 +165,4 @@ if __name__ == "__main__":
     parser.add_argument("--model", default="phi3")
     parser.add_argument("--slack", default=None)
     args = parser.parse_args()
-    
     run_monitor(config_path=args.config, snapshot_dir=args.snapshots, model_name=args.model, slack_url=args.slack)
