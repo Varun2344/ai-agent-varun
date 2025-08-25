@@ -1,6 +1,8 @@
 --- Starting Competitor Monitor (using model: phi3) ---
 
 Checking: Notion_Homepage (https://www.notion.so/)
+  -> Change DETECTED for Notion_Homepage!
+  -> AI is generating a detailed analysis...
 
 Checking: Notion_Pricing (https://www.notion.so/pricing)
 
@@ -15,7 +17,10 @@ Checking: Slack_ReleaseNotes (https://slack.com/release-notes/windows)
 Checking: Figma_Homepage (https://www.figma.com/)
 
 Checking: Figma_Pricing (https://www.wikipedia.org/)
+  -> Change DETECTED for Figma_Pricing!
+  -> AI is generating a detailed analysis...
 
 Checking: Figma_ReleaseNotes (https://www.figma.com/release-notes)
+Consolidated digest sent to Slack.
 
 --- Monitor run complete ---

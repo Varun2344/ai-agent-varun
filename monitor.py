@@ -11,19 +11,18 @@ from bs4 import BeautifulSoup
 import ollama
 import difflib
 from collections import defaultdict
+from dotenv import load_dotenv
 
 def format_and_send_digest(all_changes: dict, slack_url: str):
     """Groups all changes by category and sends a professional digest to Slack."""
     if not slack_url or not all_changes:
         return
 
-    # Group changes by their category
     changes_by_category = defaultdict(list)
     for change in all_changes:
         category = change['summary'].get('change_category', 'General Website Update')
         changes_by_category[category].append(change)
 
-    # Build the Slack message
     master_blocks = [
         {"type": "header", "text": {"type": "plain_text", "text": f"Weekly Competitor Summary - {datetime.date.today()}", "emoji": True}},
         {"type": "section", "text": {"type": "mrkdwn", "text": "Here's a detailed breakdown of everything that happened this week across competitors."}}
@@ -47,7 +46,6 @@ def format_and_send_digest(all_changes: dict, slack_url: str):
             )
             master_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": report_text}})
 
-    # Add the final summary insight
     insight = f"Overall, this week saw {len(all_changes)} significant update(s), showing trends in {' and '.join(changes_by_category.keys())}."
     master_blocks.append({"type": "divider"})
     master_blocks.append({"type": "section", "text": {"type": "mrkdwn", "text": f"*Summary Insight:* {insight}"}})
@@ -125,7 +123,7 @@ def run_monitor(config_path: str, snapshot_dir: str, model_name: str, slack_url:
 
     os.makedirs(snapshot_dir, exist_ok=True)
     
-    detected_changes = [] # A list to hold all detected changes for the final digest
+    detected_changes = []
 
     for competitor in competitors:
         name, url = competitor.get("name"), competitor.get("url")
@@ -159,10 +157,11 @@ def run_monitor(config_path: str, snapshot_dir: str, model_name: str, slack_url:
     print("\n--- Monitor run complete ---")
 
 if __name__ == "__main__":
+    load_dotenv()
+    SLACK_URL_FROM_ENV = os.getenv("SLACK_WEBHOOK_URL")
     parser = argparse.ArgumentParser(description="Monitor competitor websites for changes.")
     parser.add_argument("--config", default="competitors.json")
     parser.add_argument("--snapshots", default="./snapshots")
     parser.add_argument("--model", default="phi3")
-    parser.add_argument("--slack", default=None)
     args = parser.parse_args()
-    run_monitor(config_path=args.config, snapshot_dir=args.snapshots, model_name=args.model, slack_url=args.slack)
+    run_monitor(config_path=args.config, snapshot_dir=args.snapshots, model_name=args.model, slack_url=SLACK_URL_FROM_ENV)
